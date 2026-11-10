@@ -1,0 +1,51 @@
+plugins {
+    id 'com.android.application'
+}
+
+def buildNo = Integer.parseInt(System.getenv("GITHUB_RUN_NUMBER") ?: "1")
+
+android {
+    namespace 'com.lookin.reader'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.lookin.reader'
+        minSdk 26
+        targetSdk 33
+        versionCode buildNo
+        versionName "1." + buildNo
+    }
+
+    signingConfigs {
+        shop {
+            storeFile file('lookin.keystore')
+            storePassword 'lookin123'
+            keyAlias 'lookin'
+            keyPassword 'lookin123'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.shop
+        }
+        debug {
+            signingConfig signingConfigs.shop
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
