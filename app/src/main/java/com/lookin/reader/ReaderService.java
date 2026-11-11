@@ -64,33 +64,43 @@ public class ReaderService extends NotificationListenerService {
 
         String body = pickBody(n, e);
         String all = (title + " " + body);
-        if (!all.contains("บาท") && !all.toLowerCase(Locale.ROOT).contains("thb")) return;
-
+        boolean hasAmt = hasMoney(all);
         String label = appLabel(pkg);
+
+        // แอปอื่นที่ไม่ใช่แอปรับเงิน: ไม่ส่ง (กันแชตที่พิมพ์ว่า "โอน 100 บาท" ทำให้ขึ้น ✓ ผิด)
         if (!isMoneyApp(pkg, label)) {
-            Store.log(this, "ข้าม (แอป " + label + " / " + pkg + "): " + cut(all));
+            if (hasAmt) Store.log(this, "ข้าม (แอป " + label + " / " + pkg + "): " + cut(all));
+            return;
+        }
+        if (all.trim().isEmpty()) {
+            Store.log(this, "แจ้งเตือนจาก " + label + " แต่อ่านข้อความไม่ได้ (ว่าง)");
             return;
         }
         if (duplicate(pkg + "|" + title + "|" + body)) return;
 
+        // แอปรับเงิน: ส่งทุกแจ้งเตือนให้เครื่องสาขาอ่านยอดเอง และจดลงบันทึกทุกครั้ง
         Store.setLong(this, "lastMoneySeen", System.currentTimeMillis());
-        Net.notifyMoney(this, title, body, pkg, "เงินเข้า [" + label + "] " + cut(body));
+        Net.notifyMoney(this, title, body, pkg, (hasAmt ? "เงินเข้า [" : "แจ้งเตือน (ไม่เห็นคำว่าบาท) [") + label + "] " + cut(all));
+    }
+
+    private static boolean hasMoney(String s) {
+        return s.contains("บาท") || s.contains("฿") || s.toLowerCase(Locale.ROOT).contains("thb");
     }
 
     /** เลือกข้อความที่มีจำนวนเงิน รองรับแจ้งเตือนแบบยาว แบบรวมหลายรายการ และแบบข้อความแชต */
     private static String pickBody(Notification n, Bundle e) {
         String text = str(e.getCharSequence(Notification.EXTRA_TEXT));
         String big = str(e.getCharSequence(Notification.EXTRA_BIG_TEXT));
-        if (big.contains("บาท")) return big;
-        if (text.contains("บาท")) return text;
+        if (hasMoney(big)) return big;
+        if (hasMoney(text)) return text;
         String ticker = str(n.tickerText);
-        if (ticker.contains("บาท")) return ticker;
+        if (hasMoney(ticker)) return ticker;
         Parcelable[] msgs = e.getParcelableArray(Notification.EXTRA_MESSAGES);
         if (msgs != null) {
             for (int i = msgs.length - 1; i >= 0; i--) {
                 if (msgs[i] instanceof Bundle) {
                     String t = str(((Bundle) msgs[i]).getCharSequence("text"));
-                    if (t.contains("บาท")) return t;
+                    if (hasMoney(t)) return t;
                 }
             }
         }
@@ -98,11 +108,11 @@ public class ReaderService extends NotificationListenerService {
         if (lines != null) {
             for (CharSequence l : lines) {
                 String t = str(l);
-                if (t.contains("บาท")) return t;
+                if (hasMoney(t)) return t;
             }
         }
         String sub = str(e.getCharSequence(Notification.EXTRA_SUB_TEXT));
-        if (sub.contains("บาท")) return sub;
+        if (hasMoney(sub)) return sub;
         return big.isEmpty() ? text : big;
     }
 
