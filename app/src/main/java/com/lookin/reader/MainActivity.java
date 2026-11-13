@@ -15,6 +15,7 @@ import android.os.PowerManager;
 import android.provider.Settings;
 import android.text.InputType;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -27,7 +28,7 @@ public class MainActivity extends Activity {
     private static final int GREEN = Color.rgb(20, 137, 78), RED = Color.rgb(180, 35, 24), INK = Color.rgb(29, 27, 46);
 
     private EditText server, key, extra;
-    private TextView stAccess, stNotif, stBattery, stSelf, stNet, logView;
+    private TextView banner, stAccess, stNotif, stBattery, stSelf, stNet, logView;
     private final Handler h = new Handler(Looper.getMainLooper());
     private final Runnable refresher = new Runnable() {
         @Override public void run() { refresh(); h.postDelayed(this, 2000); }
@@ -44,6 +45,19 @@ public class MainActivity extends Activity {
         TextView title = text("Lookin Reader", 24, true);
         root.addView(title);
         root.addView(text("ตัวอ่านแจ้งเตือนเงินเข้า (แม่มณี / ถุงเงิน / K SHOP) ส่งไปเครื่องสาขา v" + version(), 14, false));
+
+        // จอสถานะ: เปิดแอปนี้ค้างไว้หน้าจอ (จอไม่ดับ) — แม่มณีจะอยู่เบื้องหลังและขึ้นแจ้งเตือนเป็นข้อความ
+        banner = text("", 20, true);
+        banner.setPadding(dp(14), dp(14), dp(14), dp(14));
+        root.addView(banner);
+        root.addView(text("วางหน้านี้เปิดค้างไว้ จอจะไม่ดับเอง — ห้ามเปิดแอปแม่มณีค้างไว้ด้านหน้า (แม่มณีจะพูดอย่างเดียว ไม่ขึ้นแจ้งเตือน ระบบอ่านยอดไม่ได้) ดูยอดในแม่มณีเสร็จให้กลับมาหน้านี้", 15, false));
+        Button bDim = button("หรี่จอ / สว่างปกติ");
+        bDim.setOnClickListener(v -> {
+            boolean d = !Store.p(this).getBoolean("dim", false);
+            Store.p(this).edit().putBoolean("dim", d).apply();
+            applyDim();
+        });
+        root.addView(bDim);
 
         root.addView(header("ขั้นที่ 1  ตั้งค่าเครื่องสาขา"));
         root.addView(text("ที่อยู่เครื่องสาขา", 14, false));
@@ -122,8 +136,16 @@ public class MainActivity extends Activity {
         sv.addView(root);
         setContentView(sv);
 
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        applyDim();
         askPostNotifications(false);
         KeepAliveService.start(this);
+    }
+
+    private void applyDim() {
+        WindowManager.LayoutParams lp = getWindow().getAttributes();
+        lp.screenBrightness = Store.p(this).getBoolean("dim", false) ? 0.05f : WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+        getWindow().setAttributes(lp);
     }
 
     @Override protected void onResume() { super.onResume(); h.post(refresher); }
@@ -154,6 +176,12 @@ public class MainActivity extends Activity {
                 + (err.isEmpty() ? "" : "\nผิดพลาดล่าสุด: " + err));
         stNet.setTextColor(netOk ? GREEN : RED);
 
+        long mSeen = Store.getLong(this, "lastMoneySeen");
+        boolean allOk = access && notif && selfOk && netOk;
+        banner.setText((allOk ? "✓ พร้อมรับเงินโอน" : "⚠ มีปัญหา — ดูบรรทัดสีแดงด้านล่าง") +
+                "\nเงินเข้าล่าสุด: " + (mSeen > 0 ? Store.hm(mSeen) + "  " + Store.getStr(this, "lastMoney") : "-"));
+        banner.setTextColor(Color.WHITE);
+        banner.setBackgroundColor(allOk ? GREEN : RED);
         logView.setText(Store.logText(this));
     }
 
